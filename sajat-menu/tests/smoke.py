@@ -13,7 +13,7 @@ def find(label, timeout=15):
     deadline=time.time()+timeout
     while time.time()<deadline:
         for n in nodes():
-            if (n.get('text')==label or n.get('content-desc')==label) and (n.get('class')!='android.widget.EditText' or label.startswith('Keresés')): return n
+            if (n.get('text','').casefold()==label.casefold() or n.get('content-desc','').casefold()==label.casefold()) and (n.get('class')!='android.widget.EditText' or label.startswith('Keresés')): return n
         time.sleep(.3)
     capture('failure')
     (OUT/'failure.xml').write_text(adb('shell','cat','/sdcard/window.xml'))
