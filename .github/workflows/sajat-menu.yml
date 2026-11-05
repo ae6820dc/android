@@ -1,0 +1,88 @@
+name: Saját Menü APK
+on:
+  push:
+    paths:
+      - 'sajat-menu/**'
+      - '.github/workflows/sajat-menu.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: sajat-menu
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Prepare SDK and stable debug signing
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+          mkdir -p "$HOME/.android" sajat-menu/signing
+          if [ -f sajat-menu/signing/debug.keystore ]; then
+            cp sajat-menu/signing/debug.keystore "$HOME/.android/debug.keystore"
+          else
+            keytool -genkeypair -noprompt -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+            cp "$HOME/.android/debug.keystore" sajat-menu/signing/debug.keystore
+          fi
+      - name: Compile and lint
+        working-directory: sajat-menu
+        run: gradle --no-daemon assembleDebug lintDebug
+      - name: Verify APK
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose sajat-menu/app/build/outputs/apk/debug/app-debug.apk
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          m=ET.parse('sajat-menu/app/src/main/AndroidManifest.xml').getroot()
+          assert not m.findall('uses-permission')
+          assert m.find('queries/intent') is not None
+          assert Path('sajat-menu/app/build/outputs/apk/debug/app-debug.apk').stat().st_size>10000
+          PY
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android 16 end-to-end test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install sajat-menu/app/build/outputs/apk/debug/app-debug.apk
+            python3 sajat-menu/tests/smoke.py
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sajat-Menu-Test
+          path: |
+            smoke-output/
+            sajat-menu/app/build/reports/lint-results-debug.html
+      - name: Publish APK file
+        run: |
+          mkdir -p distributions
+          cp sajat-menu/app/build/outputs/apk/debug/app-debug.apk distributions/Sajat-Menu.apk
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add distributions/Sajat-Menu.apk sajat-menu/signing/debug.keystore
+          git diff --cached --quiet || git commit -m 'Publish tested Saját Menü APK [skip ci]'
+          git pull --rebase
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sajat-Menu-APK
+          path: distributions/Sajat-Menu.apk
+          if-no-files-found: error
