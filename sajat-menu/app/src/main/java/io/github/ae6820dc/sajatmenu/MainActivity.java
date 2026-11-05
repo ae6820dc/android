@@ -44,12 +44,14 @@ public class MainActivity extends Activity {
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(BG);
         root.setPadding(dp(20),dp(16),dp(20),dp(12));
         root.setOnApplyWindowInsetsListener((v,insets)-> {
-            android.graphics.Insets bars = android.os.Build.VERSION.SDK_INT >= 30
-                ? insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime()) : null;
-            int left=bars!=null?bars.left:insets.getSystemWindowInsetLeft();
-            int top=bars!=null?bars.top:insets.getSystemWindowInsetTop();
-            int right=bars!=null?bars.right:insets.getSystemWindowInsetRight();
-            int bottom=bars!=null?bars.bottom:insets.getSystemWindowInsetBottom();
+            int left,top,right,bottom;
+            if(android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                left=bars.left; top=bars.top; right=bars.right; bottom=bars.bottom;
+            } else {
+                left=insets.getSystemWindowInsetLeft(); top=insets.getSystemWindowInsetTop();
+                right=insets.getSystemWindowInsetRight(); bottom=insets.getSystemWindowInsetBottom();
+            }
             v.setPadding(dp(20)+left,dp(16)+top,dp(20)+right,dp(12)+bottom); return insets;
         });
         setContentView(root);
